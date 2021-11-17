@@ -13,6 +13,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.LayoutInflater;
+import android.view.MenuItem;
 import android.view.View;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -20,6 +21,12 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.fragment.app.Fragment;
+import androidx.fragment.app.FragmentManager;
+import androidx.fragment.app.FragmentTransaction;
+
+import com.google.android.material.bottomnavigation.BottomNavigationView;
+import com.google.android.material.navigation.NavigationBarView;
 
 import java.util.ArrayList;
 import java.util.Set;
@@ -30,13 +37,10 @@ public class MainActivity extends AppCompatActivity {
 
     Boolean hasPermission;
     BluetoothAdapter bluetoothAdapter;
-    final String TAG = "BLUEDROID";
     View root;
-    ArrayList<BluetoothDeviceItem> devices;
     TextView txtName, txtType;
-    LinearLayout layDevices;
-    private BroadcastReceiver reciever;
-    private UUID myId = UUID.randomUUID();
+    BottomNavigationView navView;
+    View fragmentContainer;
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -50,72 +54,46 @@ public class MainActivity extends AppCompatActivity {
             checkPermission();
         }
 
-        layDevices = findViewById(R.id.layDevices);
+        FragmentManager manager = getSupportFragmentManager();
+        FragmentTransaction transaction = manager.beginTransaction();
+        transaction.replace(R.id.layDevices, new MainFragment());
+
         root = findViewById(R.id.rootView);
+        navView = findViewById(R.id.navView);
+        fragmentContainer = findViewById(R.id.mainFragment);
 
-
-        reciever = new BroadcastReceiver () {
+        navView.setOnItemSelectedListener(new NavigationBarView.OnItemSelectedListener() {
             @Override
-            public void onReceive(Context context, Intent intent) {
-                Log.i(TAG, "New device found");
-                if(intent.getAction().equals(BluetoothDevice.ACTION_FOUND)) {
-                    BluetoothDevice device = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
-                    devices.add(new BluetoothDeviceItem(device.getName(), device, false));
-                    makeList();
+            public boolean onNavigationItemSelected(@NonNull MenuItem item) {
+                switch (item.getItemId()) {
+                    case R.id.homeBtn:
+                        replaceFragment(new MainFragment());
+                        break;
+                    case R.id.settingBtn:
+                        replaceFragment(new SettingFragment());
+                        break;
                 }
+                return true;
             }
-        };
-
-        checkBluetooth();
+        });
 
     }
 
-    @Override
-    protected void onDestroy() {
-        super.onDestroy();
-        unregisterReceiver(reciever);
+    public void replaceFragment(Fragment fragment) {
+        FragmentTransaction fragmentTransaction = getSupportFragmentManager().beginTransaction();
+        fragmentTransaction.replace(R.id.mainFragment, fragment);
+        fragmentTransaction.commit();
     }
 
-    private void checkBluetooth() {
-        devices = new ArrayList<>();
-        BluetoothAdapter bluetoothAdapter = Bluetooth.checkBluetooth(this);
-        if(bluetoothAdapter != null) {
-            Set<BluetoothDevice> pairedDevices = bluetoothAdapter.getBondedDevices();
-            if (pairedDevices.size() > 0) {
-                for(BluetoothDevice device : pairedDevices) {
-                    devices.add(new BluetoothDeviceItem(device.getName(), device, true));
-                }
-            }
-            makeList();
-
-            IntentFilter discoverBluetooth = new IntentFilter(BluetoothDevice.ACTION_FOUND);
-            registerReceiver(reciever, discoverBluetooth);
-        }
-    }
-
-
-
-    private void makeList() {
-        layDevices.removeAllViews();
-        for(BluetoothDeviceItem device : devices) {
-            LayoutInflater inflater = getLayoutInflater();
-            View listRootView = inflater.inflate(R.layout.bluetooth_device, null);
-            TextView txtName = listRootView.findViewById(R.id.txtName);
-            TextView txtType = listRootView.findViewById(R.id.txtType);
-            txtName.setText(device.name);
-            txtType.setText(device.paired ? "Paired" : "Not paired");
-            layDevices.addView(listRootView);
-            listRootView.getLayoutParams().height = 80;
-        }
-    }
 
     private void checkPermission() {
         if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            Log.i("BLUE", ""+checkSelfPermission(Manifest.permission.BLUETOOTH));
-            if(checkSelfPermission(Manifest.permission.BLUETOOTH) != PackageManager.PERMISSION_GRANTED) {
-                ArrayList<String> permissions = new ArrayList<>();
-                permissions.add(Manifest.permission.BLUETOOTH);
-                requestPermissions((String[]) permissions.toArray(), 5);
+            Log.i("BLUE", ""+checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION));
+            if(checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                String[] permissions = new String[]{
+                        Manifest.permission.ACCESS_FINE_LOCATION
+                };
+                requestPermissions(permissions, 5);
             }
         }
     }
@@ -130,33 +108,6 @@ public class MainActivity extends AppCompatActivity {
                 editor.putBoolean("has permission", true);
                 editor.commit();
             }
-        }
-    }
-
-
-    class BluetoothThread extends Thread {
-
-        BluetoothDevice device;
-
-        public BluetoothThread(BluetoothDevice device) {
-            this.device = device;
-        }
-
-        public void connect() {
-            BluetoothAdapter adapter = Bluetooth.checkBluetooth(MainActivity.this);
-            if(adapter != null) {
-                try {
-                    device.createRfcommSocketToServiceRecord(myId);
-                }catch (Exception e) {
-                    Log.e(TAG, e.getMessage());
-                }
-            }
-        }
-
-        @Override
-        public void run() {
-            super.run();
-
         }
     }
 }
