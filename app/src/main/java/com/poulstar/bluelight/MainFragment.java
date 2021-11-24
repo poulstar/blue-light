@@ -2,6 +2,8 @@ package com.poulstar.bluelight;
 
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
+import android.bluetooth.BluetoothServerSocket;
+import android.bluetooth.BluetoothSocket;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -20,7 +22,12 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
@@ -32,6 +39,7 @@ public class MainFragment extends Fragment {
     private BroadcastReceiver reciever;
     private UUID myId = UUID.randomUUID();
     private BluetoothAdapter bluetoothAdapter;
+    private BluetoothConnectThread bluetoothThread;
 
     @Nullable
     @Override
@@ -70,6 +78,20 @@ public class MainFragment extends Fragment {
             txtType.setText(device.paired ? "Paired" : "Not paired");
             layDevices.addView(listRootView);
             listRootView.getLayoutParams().height = 80;
+
+            listRootView.setOnClickListener(view -> {
+                // connect to device
+                if(bluetoothThread != null) {
+                    bluetoothThread.disconnect();
+                    try {
+                        bluetoothThread.join();
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                }
+                bluetoothThread = new BluetoothConnectThread(device);
+                bluetoothThread.start();
+            });
         }
     }
 
@@ -117,30 +139,77 @@ public class MainFragment extends Fragment {
         super.onDestroy();
     }
 
-    class BluetoothThread extends Thread {
+    class BluetoothConnectThread extends Thread {
 
-        BluetoothDevice device;
+        BluetoothDeviceItem device;
+        BluetoothSocket socket;
+        OutputStream out;
+        InputStream in;
 
-        public BluetoothThread(BluetoothDevice device) {
+        public BluetoothConnectThread(BluetoothDeviceItem device) {
             this.device = device;
-        }
-
-        public void connect() {
-            BluetoothAdapter adapter = Bluetooth.checkBluetooth(getActivity());
-            if(adapter != null) {
-                try {
-                    device.createRfcommSocketToServiceRecord(myId);
-                }catch (Exception e) {
-                    Log.e(TAG, e.getMessage());
-                }
-            }
         }
 
         @Override
         public void run() {
-            super.run();
+            try {
+                socket = device.bluetoothDevice.createRfcommSocketToServiceRecord(myId);
+                socket.connect();
+                bluetoothAdapter.cancelDiscovery();
 
+                out = socket.getOutputStream();
+                in = socket.getInputStream();
+            } catch (IOException e) {
+                Log.e(TAG, "Couldn't connect to device. "+e.getMessage());
+            }
         }
+
+        public void writeString(String data) {
+            try {
+                Objects.requireNonNull(out).write(data.getBytes(StandardCharsets.UTF_8));
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+
+        public void disconnect() {
+            if(socket != null) {
+                try {
+                    socket.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+
     }
+
+
+
+//    class BluetoothThread extends Thread {
+//
+//        BluetoothDevice device;
+//
+//        public BluetoothThread(BluetoothDevice device) {
+//            this.device = device;
+//        }
+//
+//        public void connect() {
+//            BluetoothAdapter adapter = Bluetooth.checkBluetooth(getActivity());
+//            if(adapter != null) {
+//                try {
+//                    device.createRfcommSocketToServiceRecord(myId);
+//                }catch (Exception e) {
+//                    Log.e(TAG, e.getMessage());
+//                }
+//            }
+//        }
+//
+//        @Override
+//        public void run() {
+//            super.run();
+//
+//        }
+//    }
 
 }
